@@ -209,7 +209,6 @@ def main():
     api_key = config["gemini_api_key"]
     check_interval = config["check_interval"]
 
-    # === 【修正箇所】ご指摘の日本語レイアウトのみに書き換え ===
     print("\n========= 現在の起動設定 =========")
     
     mode_text = "総合・主要" if category == "domestic" else category
@@ -225,7 +224,6 @@ def main():
     
     print(f"パトロール時間間隔：{check_interval}秒ごと")
     print("==================================\n")
-    # ========================================================
 
     print("📡 ニュースのパトロールを開始しました...")
     
@@ -238,6 +236,20 @@ def main():
         
         send_to_discord(webhook_url, last_news, is_test=True, summary=summary)
         write_to_excel(mode_text, last_news["title"], last_news["url"], summary)
+        
+        speech_text = f"パトロールを開始しました。現在の最新ニュースです。{last_news['title']}。"
+        if summary:
+            clean_summary = summary.replace("・", "").replace("\n", "。")
+            speech_text += f"、AIによる要約です。{clean_summary}"
+        
+        # ★起動時に音声を再生（ピンポイントで追加）
+        try:
+            import pyttsx3
+            engine = pyttsx3.init()
+            engine.say(speech_text)
+            engine.runAndWait()
+        except Exception as e:
+            print(f"⚠️ 音声読み上げに失敗しました: {e}")
     else:
         print("⚠️ 初回のニュース取得に失敗しました。次の回に再試行します。")
     
@@ -251,16 +263,42 @@ def main():
             body = fetch_news_body(current_news["url"])
             summary = summarize_with_gemini(api_key, current_news["title"], body)
             
+            # === 音声読み上げ用テキストの組み立てロジック ===
+            speech_text = f"新着ニュースです。{current_news['title']}。"
+            if summary:
+                # AIの箇条書きの「・」を「。」に置き換えて、聞き取りやすい自然な文章にする
+                clean_summary = summary.replace("・", "").replace("\n", "。")
+                speech_text += f"、AIによる要約です。{clean_summary}"
+            # ========================================================
+            
             if not keywords:
                 print("🆕 新しい記事を検知しました！")
                 send_to_discord(webhook_url, current_news, summary=summary)
                 write_to_excel(mode_text, current_news["title"], current_news["url"], summary)
+                
+                # ★音声を再生
+                try:
+                    import pyttsx3
+                    engine = pyttsx3.init()
+                    engine.say(speech_text)
+                    engine.runAndWait()
+                except Exception as e:
+                    print(f"⚠️ 音声読み上げに失敗しました: {e}")
             else:
                 for word in keywords:
                     if word.lower() in current_news["title"].lower():
                         print(f"🎯 キーワード「{word}」にヒットする新着記事を検知！")
                         send_to_discord(webhook_url, current_news, hit_word=word, summary=summary)
                         write_to_excel(mode_text, current_news["title"], current_news["url"], summary)
+                        
+                        # ★音声を再生
+                        try:
+                            import pyttsx3
+                            engine = pyttsx3.init()
+                            engine.say(speech_text)
+                            engine.runAndWait()
+                        except Exception as e:
+                            print(f"⚠️ 音声読み上げに失敗しました: {e}")
                         break
 
 
