@@ -14,7 +14,7 @@ from news_processor import (
 def main():
     print("⚙️ 設定ファイルを読み込んでいます...")
     config = load_config()
-    
+
     if not config:
         print("❌ プログラムを起動できませんでした。")
         return
@@ -42,56 +42,75 @@ def main():
     print("==================================\n")
 
     print("📡 ニュースのパトロールを開始しました...")
-    
+
+    # 初回起動時のチェック
     last_news = get_latest_news(category)
     if last_news:
-        print(f"現在の最新記事を記憶しました: {last_news['title']}")
-        
-        body = fetch_news_body(last_news["url"])
-        summary = summarize_with_gemini(api_key, last_news["title"], body)
-        
-        send_to_discord(webhook_url, last_news, is_test=True, summary=summary)
-        write_to_excel(mode_text, last_news["title"], last_news["url"], summary)
-        
-        speech_text = f"パトロールを開始しました。現在の最新ニュースです。{last_news['title']}。"
-        if summary:
-            clean_summary = summary.replace("・", "").replace("\n", "。")
-            speech_text += f"、AIによる要約です。{clean_summary}"
+        # Excelの過去ログをチェックして重複を防止
+        from news_processor import is_title_already_notified
 
-        speak_text(speech_text)
+        if is_title_already_notified(last_news["title"]):
+            print(f"⏭️  [重複スキップ] 過去ログにある既存の記事のため、通知・朗読をスキップします: {last_news['title']}")
+        else:
+            print(f"🆕 初回の最新記事を検知しました: {last_news['title']}")
+            body = fetch_news_body(last_news["url"])
+            summary = summarize_with_gemini(api_key, last_news["title"], body)
+            send_to_discord(webhook_url, last_news, is_test=True, summary=summary)
+            write_to_excel(mode_text, last_news["title"], last_news["url"], summary)
+            speech = f"起動しました。最新ニュース、{last_news['title']}。"
+            if summary:
+                speech += (f"要約、{summary.replace('・', '').replace('\n', '。')}")
+            speak_text(speech)
     else:
         print("⚠️ 初回のニュース取得に失敗しました。次の回に再試行します。")
-    
+
+    # パトロールの無限ループ
     while True:
         time.sleep(check_interval)
         current_news = get_latest_news(category)
-        
+
         if current_news and (last_news is None or current_news["title"] != last_news["title"]):
             last_news = current_news
-            
+
+            # ここでも過去ログの重複を最終チェック（安全ガード）
+            from news_processor import is_title_already_notified
+
+            if is_title_already_notified(current_news["title"]):
+                continue
+
             body = fetch_news_body(current_news["url"])
             summary = summarize_with_gemini(api_key, current_news["title"], body)
-            
-            # === 音声読み上げ用テキストの組み立てロジック ===
-            speech_text = f"新着ニュースです。{current_news['title']}。"
+            speech = f"新着ニュースです、{current_news['title']}。"
             if summary:
-                # AIの箇条書きの「・」を「。」に置き換えて、聞き取りやすい自然な文章にする
-                clean_summary = summary.replace("・", "").replace("\n", "。")
-                speech_text += f"、AIによる要約です。{clean_summary}"
-            # ========================================================
-            
+                speech += f"要約、{summary.replace('・', '').replace('\n', '。')}"
+
             if not keywords:
-                print("🆕 新しい記事を検知しました！")
+                print(f"🆕 新着記事を検知しました: {current_news['title']}")
                 send_to_discord(webhook_url, current_news, summary=summary)
-                write_to_excel(mode_text, current_news["title"], current_news["url"], summary)
-                speak_text(speech_text)
+                write_to_excel(
+                    mode_text,
+                    current_news["title"],
+                    current_news["url"],
+                    summary,
+                )
+                speak_text(speech)
             else:
                 for word in keywords:
                     if word.lower() in current_news["title"].lower():
-                        print(f"🎯 キーワード「{word}」にヒットする新着記事を検知！")
-                        send_to_discord(webhook_url, current_news, hit_word=word, summary=summary)
-                        write_to_excel(mode_text, current_news["title"], current_news["url"], summary)
-                        speak_text(speech_text)
+                        print(f"🎯 キーワード「{word}」にヒット: {current_news['title']}")
+                        send_to_discord(
+                            webhook_url,
+                            current_news,
+                            hit_word=word,
+                            summary=summary,
+                        )
+                        write_to_excel(
+                            mode_text,
+                            current_news["title"],
+                            current_news["url"],
+                            summary,
+                        )
+                        speak_text(speech)
                         break
 
 
