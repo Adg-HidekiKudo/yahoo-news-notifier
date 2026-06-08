@@ -43,7 +43,7 @@ pip install requests beautifulsoup4 google-genai openpyxl pyttsx3 pandas
 # Discord通知ボットの設定ファイル（#で始まる行はコメントとして無視されます）
 
 DISCORD_WEBHOOK_URL=https://discord.com...（あなたのWebhook URLをここに貼り付け）
-CATEGORY=it
+CATEGORY=it,business,science
 KEYWORDS=Python,AI,iPhone
 GEMINI_API_KEY=AIzaSy...（あなたのGemini APIキーをここに貼り付け）
 CHECK_INTERVAL=60
@@ -52,7 +52,7 @@ CHECK_INTERVAL=60
 
 #### 💡 各設定項目の詳細
 - **`DISCORD_WEBHOOK_URL=`** : 通知を送りたいDiscordチャンネルのWebhook URLを入力します（必須）。
-- **`CATEGORY=`** : 以下の設定値（英語）を記述してジャンルを変更できます。空欄、または行ごと削除した場合は、自動的に **「総合・主要」** のニュースをパトロールします。
+- **`CATEGORY=`** : 以下の設定値（英語）を記述してジャンルを変更できます。複数指定する場合はカンマ区切りで入力してください。空欄、または行ごと削除した場合は、自動的に **「総合・主要」** のニュースをパトロールします。
 
 
 | 設定値（英語） | ニュースのジャンル |

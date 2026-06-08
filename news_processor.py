@@ -17,7 +17,7 @@ def load_config():
     """config.txtから各種設定を読み込む"""
     config = {
         "webhook_url": None,
-        "category": "domestic",
+        "categories": ["domestic"],
         "keywords": [],
         "gemini_api_key": None,
         "check_interval": 60,
@@ -39,7 +39,10 @@ def load_config():
                 elif line.startswith("CATEGORY="):
                     val = line.split("=", 1)[1].strip()
                     if val:
-                        config["category"] = val
+                        # カンマ区切りで複数カテゴリを受け取る
+                        cats = [c.strip() for c in val.split(",") if c.strip()]
+                        if cats:
+                            config["categories"] = cats
                 elif line.startswith("KEYWORDS="):
                     val = line.split("=", 1)[1].strip()
                     if val:
