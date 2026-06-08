@@ -89,6 +89,29 @@ def get_latest_news(category):
     return None
 
 
+def is_title_already_notified(title):
+    """Excelのログファイルを読み込み、同じニュースタイトルが既に記録されているかチェックする"""
+    if not os.path.exists(EXCEL_FILE):
+        return False  # Excelファイル自体がなければ、まだ通知されていない
+
+    try:
+        # Excelファイルを読み込む
+        df = pd.read_excel(EXCEL_FILE, sheet_name="News Log")
+
+        if df.empty or "ニュースタイトル" not in df.columns:
+            return False
+
+        # タイトル列（空白や大文字小文字を整えて比較）に同じものがあるか判定
+        existing_titles = df["ニュースタイトル"].astype(str).str.strip().tolist()
+        if title.strip() in existing_titles:
+            return True
+
+    except Exception as e:
+        print(f"⚠️ 過去ログの重複チェック中にエラーが発生しました: {e}")
+
+    return False
+
+
 def fetch_news_body(article_url):
     """ニュースのURLから本文テキストをスクレイピングして取得する"""
     headers = {
