@@ -6,6 +6,7 @@ from google import genai
 import openpyxl
 from openpyxl.chart import PieChart, Reference
 import pandas as pd
+from utils.http import get_text, get_client, HTTPError
 
 # === 設定エリア ===
 CONFIG_FILE = "config.txt"
@@ -96,11 +97,8 @@ def get_latest_news(category):
     }
 
     try:
-        response = requests.get(url, headers=headers, timeout=10)
-        if response.status_code != 200:
-            return None
-
-        soup = BeautifulSoup(response.text, "html.parser")
+        response_text = get_text(url, headers=headers)
+        soup = BeautifulSoup(response_text, "html.parser")
         for link in soup.find_all("a"):
             href = link.get("href", "")
             title = link.text.strip()
@@ -108,6 +106,8 @@ def get_latest_news(category):
                 if href.startswith("/"):
                     href = f"{base_domain}{href}"
                 return {"title": title, "url": href}
+    except HTTPError as e:
+        print(f"データ取得エラー: {e}")
     except Exception as e:
         print(f"データ取得エラー: {e}")
     return None
@@ -142,12 +142,13 @@ def fetch_news_body(article_url):
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
     }
     try:
-        response = requests.get(article_url, headers=headers, timeout=10)
-        if response.status_code == 200:
-            soup = BeautifulSoup(response.text, "html.parser")
-            paragraphs = soup.find_all("p")
-            body_text = "".join([p.text.strip() for p in paragraphs if len(p.text.strip()) > 10])
-            return body_text[:1500]
+        body_html = get_text(article_url, headers=headers)
+        soup = BeautifulSoup(body_html, "html.parser")
+        paragraphs = soup.find_all("p")
+        body_text = "".join([p.text.strip() for p in paragraphs if len(p.text.strip()) > 10])
+        return body_text[:1500]
+    except HTTPError as e:
+        print(f"⚠️ 本文の取得に失敗しました: {e}")
     except Exception as e:
         print(f"⚠️ 本文の取得に失敗しました: {e}")
     return ""
@@ -319,14 +320,14 @@ def send_to_discord(webhook_url, news, is_test=False, hit_word=None, summary=Non
     payload = {"content": content}
 
     try:
-        response = requests.post(webhook_url, json=payload, timeout=10)
-        if 200 <= response.status_code < 300:
-            if news:
-                print(f"✅ Discordへ通知しました: {news['title']}")
-            else:
-                print("✅ Discordへテスト通知を送信しました。")
+        client = get_client()
+        client.post_json(webhook_url, payload)
+        if news:
+            print(f"✅ Discordへ通知しました: {news['title']}")
         else:
-            print(f"❌ Discord側が拒否しました (ステータスコード: {response.status_code})")
+            print("✅ Discordへテスト通知を送信しました。")
+    except HTTPError as e:
+        print(f"❌ 通信エラーが発生しました: {e}")
     except Exception as e:
         print(f"❌ 通信エラーが発生しました: {e}")
 
