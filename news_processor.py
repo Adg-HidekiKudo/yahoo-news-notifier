@@ -1,5 +1,5 @@
 import os
-import requests
+import time
 from datetime import datetime
 from bs4 import BeautifulSoup
 from google import genai
@@ -12,6 +12,47 @@ from utils.http import get_text, get_client, HTTPError
 CONFIG_FILE = "config.txt"
 EXCEL_FILE = "news_log.xlsx"
 # ==================
+
+
+def _is_retryable_api_error(exception):
+    """API呼び出しのエラーがリトライ可能かを判定する"""
+    error_str = str(exception)
+    # 503 (UNAVAILABLE), 429 (Too Many Requests), 500 (Internal Server Error) はリトライ対象
+    retryable_codes = ['503', '429', '500', 'UNAVAILABLE', 'INTERNAL', 'SERVICE_UNAVAILABLE']
+    return any(code in error_str for code in retryable_codes)
+
+
+def _call_gemini_api(prompt, max_retries=8):
+    """Gemini APIの共通呼び出し（リトライ付き）"""
+    api_key = os.environ.get("GEMINI_API_KEY")
+    if not api_key:
+        # config.txtから読み込み（グローバル設定を使用）
+        config = load_config()
+        if config:
+            api_key = config.get("gemini_api_key")
+    
+    for attempt in range(max_retries):
+        try:
+            client = genai.Client(api_key=api_key)
+            response = client.models.generate_content(
+                model="gemini-2.5-flash",
+                contents=prompt,
+            )
+            return response.text.strip()
+        except Exception as e:
+            error_str = str(e)
+            if _is_retryable_api_error(e):
+                wait_time = min(2 ** attempt * 2, 60)  # 指数バックオフ: 2, 4, 8, 16, 32, 64... 最大60秒
+                print(f"⚠️ Gemini API 一時的なエラー (試行 {attempt+1}/{max_retries}): {error_str}")
+                print(f"   {wait_time}秒待機してから再試行します...\n")
+                time.sleep(wait_time)
+            else:
+                # リトライ不可の永続的なエラー
+                print(f"❌ Gemini API エラー (リトライ不可): {error_str}")
+                return None
+    
+    print(f"❌ Gemini API: 最大リトライ回数 ({max_retries}回) に達しました。")
+    return None
 
 
 def load_config():
@@ -155,60 +196,44 @@ def fetch_news_body(article_url):
 
 
 def summarize_with_gemini(api_key, title, body_text):
-    """Gemini APIを使用して、ニュース本文を3行の箇条書きに要約する"""
+    """Gemini APIを使用して、ニュース本文を3行の箇条書きに要約する（リトライ付き）"""
     if not api_key or not body_text:
         return None
 
-    try:
-        client = genai.Client(api_key=api_key)
-        prompt = f"""
-        以下のニュース記事の内容を読み、重要なポイントを3行のシンプルな箇条書き（各行の先頭は「・」）で要約してください。
-        余計な挨拶や前置きは一切省き、要約文だけを出力してください。
+    prompt = f"""
+    以下のニュース記事の内容を読み、重要なポイントを3行のシンプルな箇条書き（各行の先頭は「・」）で要約してください。
+    余計な挨拶や前置きは一切省き、要約文だけを出力してください。
 
-        【タイトル】: {title}
-        【本文】: {body_text}
-        """
-        response = client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=prompt,
-        )
-        return response.text.strip()
-    except Exception as e:
-        print(f"⚠️ Gemini要約エラー: {e}")
-    return None
+    【タイトル】: {title}
+    【本文】: {body_text}
+    """
+    return _call_gemini_api(prompt, max_retries=8)
 
 
 def score_semantic_match(api_key, interest_text, title, body_text):
-    """Gemini を使って、ニュースが関心分野にどの程度合致するかを 0-100 の整数スコアで返す"""
+    """Gemini を使って、ニュースが関心分野にどの程度合致するかを 0-100 の整数スコアで返す（リトライ付き）"""
     if not api_key or not interest_text or not title or not body_text:
         return None
 
-    try:
-        client = genai.Client(api_key=api_key)
-        prompt = f"""
-        以下のユーザーの関心テーマとニュース記事がどの程度関連しているかを、0～100のスコアで評価してください。
-        100は非常に関連性が高い、0は関連性がほとんどないことを意味します。
-        数字のみを返してください。
+    prompt = f"""
+    以下のユーザーの関心テーマとニュース記事がどの程度関連しているかを、0～100のスコアで評価してください。
+    100は非常に関連性が高い、0は関連性がほとんどないことを意味します。
+    数字のみを返してください。
 
-        【ユーザーの関心】{interest_text}
-        【ニュースタイトル】{title}
-        【ニュース本文】{body_text}
-        """
-        response = client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=prompt,
-        )
-        response_text = response.text.strip()
-
+    【ユーザーの関心】{interest_text}
+    【ニュースタイトル】{title}
+    【ニュース本文】{body_text}
+    """
+    response_text = _call_gemini_api(prompt, max_retries=8)
+    
+    if response_text:
         import re
         match = re.search(r"\b([0-9]{1,3})\b", response_text)
         if match:
             score = int(match.group(1))
             if 0 <= score <= 100:
                 return score
-    except Exception as e:
-        print(f"⚠️ セマンティックスコアリングエラー: {e}")
-
+    
     return None
 
 
