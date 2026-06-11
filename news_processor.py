@@ -22,14 +22,10 @@ def _is_retryable_api_error(exception):
     return any(code in error_str for code in retryable_codes)
 
 
-def _call_gemini_api(prompt, max_retries=8):
+def _call_gemini_api(prompt, api_key, max_retries=8):
     """Gemini APIの共通呼び出し（リトライ付き）"""
-    api_key = os.environ.get("GEMINI_API_KEY")
     if not api_key:
-        # config.txtから読み込み（グローバル設定を使用）
-        config = load_config()
-        if config:
-            api_key = config.get("gemini_api_key")
+        api_key = os.environ.get("GEMINI_API_KEY")
     
     for attempt in range(max_retries):
         try:
@@ -54,79 +50,6 @@ def _call_gemini_api(prompt, max_retries=8):
     print(f"❌ Gemini API: 最大リトライ回数 ({max_retries}回) に達しました。")
     return None
 
-
-def load_config():
-    """config.txtから各種設定を読み込む"""
-    config = {
-        "webhook_url": None,
-        "categories": ["domestic"],
-        "keywords": [],
-        "gemini_api_key": None,
-        "ai_summary_enabled": True,
-        "check_interval": 60,
-        "semantic_interest": None,
-        "semantic_threshold": 80,
-    }
-
-    if not os.path.exists(CONFIG_FILE):
-        print(f"❌ エラー: 設定ファイル '{CONFIG_FILE}' が見つかりません。")
-        return None
-
-    try:
-        with open(CONFIG_FILE, "r", encoding="utf-8") as f:
-            for line in f:
-                line = line.strip()
-                if not line or line.startswith("#"):
-                    continue
-
-                if line.startswith("DISCORD_WEBHOOK_URL="):
-                    config["webhook_url"] = line.split("=", 1)[1].strip()
-                elif line.startswith("CATEGORY="):
-                    val = line.split("=", 1)[1].strip()
-                    if val:
-                        # カンマ区切りで複数カテゴリを受け取る
-                        cats = [c.strip() for c in val.split(",") if c.strip()]
-                        if cats:
-                            config["categories"] = cats
-                elif line.startswith("KEYWORDS="):
-                    val = line.split("=", 1)[1].strip()
-                    if val:
-                        config["keywords"] = [k.strip() for k in val.split(",") if k.strip()]
-                elif line.startswith("GEMINI_API_KEY="):
-                    val = line.split("=", 1)[1].strip()
-                    if val:
-                        config["gemini_api_key"] = val
-                elif line.startswith("AI_SUMMARY_ENABLED="):
-                    val = line.split("=", 1)[1].strip()
-                    if val:
-                        config["ai_summary_enabled"] = val.lower() in {"1", "true", "yes", "on"}
-                    else:
-                        config["ai_summary_enabled"] = False
-                elif line.startswith("SEMANTIC_INTEREST="):
-                    val = line.split("=", 1)[1].strip()
-                    if val:
-                        config["semantic_interest"] = val
-                elif line.startswith("SEMANTIC_THRESHOLD="):
-                    val = line.split("=", 1)[1].strip()
-                    if val and val.isdigit():
-                        threshold = int(val)
-                        if 0 <= threshold <= 100:
-                            config["semantic_threshold"] = threshold
-                        else:
-                            print("⚠️ SEMANTIC_THRESHOLD は 0〜100 の範囲で指定してください。デフォルト 80 を使用します。")
-                elif line.startswith("CHECK_INTERVAL="):
-                    val = line.split("=", 1)[1].strip()
-                    if val and val.isdigit():
-                        config["check_interval"] = int(val)
-
-        if not config["webhook_url"]:
-            print(f"❌ エラー: '{CONFIG_FILE}' 内に DISCORD_WEBHOOK_URL の値が設定されていません。")
-            return None
-
-        return config
-    except Exception as e:
-        print(f"❌ 設定ファイルの読み込み中にエラーが発生しました: {e}")
-        return None
 
 
 def get_latest_news(category):
@@ -207,7 +130,7 @@ def summarize_with_gemini(api_key, title, body_text):
     【タイトル】: {title}
     【本文】: {body_text}
     """
-    return _call_gemini_api(prompt, max_retries=8)
+    return _call_gemini_api(prompt, api_key, max_retries=8)
 
 
 def score_semantic_match(api_key, interest_text, title, body_text):
@@ -224,7 +147,7 @@ def score_semantic_match(api_key, interest_text, title, body_text):
     【ニュースタイトル】{title}
     【ニュース本文】{body_text}
     """
-    response_text = _call_gemini_api(prompt, max_retries=8)
+    response_text = _call_gemini_api(prompt, api_key, max_retries=8)
     
     if response_text:
         import re
