@@ -46,6 +46,9 @@ DISCORD_WEBHOOK_URL=https://discord.com...（あなたのWebhook URLをここに
 CATEGORY=it,business,science
 KEYWORDS=Python,AI,iPhone
 GEMINI_API_KEY=AIzaSy...（あなたのGemini APIキーをここに貼り付け）
+AI_SUMMARY_ENABLED=true
+SEMANTIC_INTEREST=ガジェットの最新技術
+SEMANTIC_THRESHOLD=80
 CHECK_INTERVAL=60
 ```
 *※ `=` の前後にスペース（空白）を入れずに記述してください。*
@@ -69,7 +72,14 @@ CHECK_INTERVAL=60
   - 半角カンマ（`,`）で区切って入力すると、**どれか1つでも含まれていたら通知**する（OR検索）ようになります（例: `Python,AI`）。
   - 空欄にするか行ごと削除すると、すべての新着ニュースを通知・読み上げします。
 - **`GEMINI_API_KEY=`** : Google AI Studioで取得した無料のAPIキーを入力します。
-  - キーを入力すると自動的に「AI要約モード」および「要約の音声読み上げ」が有効になります。空欄にした場合は通常通知として動作します。
+  - `AI_SUMMARY_ENABLED=true` の場合、`GEMINI_API_KEY` が設定されていなければ要約は実行されません。
+- **`AI_SUMMARY_ENABLED=`** : AI要約機能を有効/無効にします。
+  - `true` / `1` / `yes` / `on` を設定すると有効になります。
+  - `false` / 空欄の場合は無効で、記事の要約・音声読み上げは実行されません。
+- **`SEMANTIC_INTEREST=`** : 関心のあるテーマを文章で指定します。例: `ガジェットの最新技術` や `副業に役立つ経済知識`。
+  - この項目を設定すると、Geminiがニュースタイトルと本文をユーザーの関心と比較し、関連度を判定します。
+- **`SEMANTIC_THRESHOLD=`** : セマンティックスコアのしきい値を 0 〜 100 で指定します。
+  - 高い値ほど絞り込みが厳しくなり、関心に強く一致するニュースのみを通知します。デフォルトは `80` です。
 - **`CHECK_INTERVAL=`** : ニュースをチェックしに行く間隔を **「秒数」** で指定します。（デフォルトは `60` 秒）。
 
 ### 2. アプリケーションの実行
