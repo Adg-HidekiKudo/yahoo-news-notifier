@@ -35,26 +35,36 @@ pip install requests beautifulsoup4 google-genai openpyxl pyttsx3 pandas
 
 ## 🚀 アプリの使い方
 
-### 1. 設定ファイルの書き換え
-プログラムと同じフォルダ（ディレクトリ）内にある **`config.txt`** をメモ帳などで開きます。
-用意されている各項目に、それぞれ値を設定して上書き保存します。
+### 1. 設定ファイルの作成と設定
+
+#### 📝 config.txt の作成
+このリポジトリをクローン時には **`config.txt`** は含まれていません。以下の手順で新規作成してください。
+
+1. **プログラムと同じフォルダ（ディレクトリ）内に `config.txt` という新規ファイルを作成します。**
+   - Windows: エクスプローラで右クリック → 新規作成 → テキストドキュメント → 名前を `config.txt` に変更
+   - または、メモ帳を開いて → 名前をつけて保存 → `config.txt` として保存
+
+2. **以下の設定項目をテンプレートとしてコピーして、ファイルに貼り付けます。**
 
 ```text
 # Discord通知ボットの設定ファイル（#で始まる行はコメントとして無視されます）
 
-DISCORD_WEBHOOK_URL=https://discord.com...（あなたのWebhook URLをここに貼り付け）
+DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/XXXXXX/XXXXXX
+GEMINI_API_KEY=AIzaSyXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 CATEGORY=it,business,science
 KEYWORDS=Python,AI,iPhone
-GEMINI_API_KEY=AIzaSy...（あなたのGemini APIキーをここに貼り付け）
 AI_SUMMARY_ENABLED=true
 SEMANTIC_INTEREST=ガジェットの最新技術
 SEMANTIC_THRESHOLD=80
 CHECK_INTERVAL=60
 ```
-*※ `=` の前後にスペース（空白）を入れずに記述してください。*
+
+3. **各項目に自分の環境に合わせた値を設定して保存します。**
+   - *※ `=` の前後にスペース（空白）を入れずに記述してください。*
 
 #### 💡 各設定項目の詳細
 - **`DISCORD_WEBHOOK_URL=`** : 通知を送りたいDiscordチャンネルのWebhook URLを入力します（必須）。
+  - 取得方法: Discord > サーバー設定 > 連携機能 > ウェブフック > 新規ウェブフック作成から URL をコピー
 - **`CATEGORY=`** : 以下の設定値（英語）を記述してジャンルを変更できます。複数指定する場合はカンマ区切りで入力してください。空欄、または行ごと削除した場合は、自動的に **「総合・主要」** のニュースをパトロールします。
 
 
@@ -71,13 +81,17 @@ CHECK_INTERVAL=60
 - **`KEYWORDS=`** : 通知してほしい特定の単語を記述します。
   - 半角カンマ（`,`）で区切って入力すると、**どれか1つでも含まれていたら通知**する（OR検索）ようになります（例: `Python,AI`）。
   - 空欄にするか行ごと削除すると、すべての新着ニュースを通知・読み上げします。
+  - 注: キーワード指定時は、キーワードマッチが優先されます。セマンティック関心と組み合わせて使うことはできません。
 - **`GEMINI_API_KEY=`** : Google AI Studioで取得した無料のAPIキーを入力します。
-  - `AI_SUMMARY_ENABLED=true` の場合、`GEMINI_API_KEY` が設定されていなければ要約は実行されません。
+  - 取得方法: [Google AI Studio](https://aistudio.google.com/app/apikey) にアクセス → "API キーを作成" で新規キーを生成してコピー
+  - `AI_SUMMARY_ENABLED=true` かつ `GEMINI_API_KEY` が設定されていて初めて、記事の要約機能が動作します。
 - **`AI_SUMMARY_ENABLED=`** : AI要約機能を有効/無効にします。
-  - `true` / `1` / `yes` / `on` を設定すると有効になります。
+  - `true` / `1` / `yes` / `on` を設定すると有効になります（詳細は上記 `GEMINI_API_KEY` を参照）。
   - `false` / 空欄の場合は無効で、記事の要約・音声読み上げは実行されません。
 - **`SEMANTIC_INTEREST=`** : 関心のあるテーマを文章で指定します。例: `ガジェットの最新技術` や `副業に役立つ経済知識`。
   - この項目を設定すると、Geminiがニュースタイトルと本文をユーザーの関心と比較し、関連度を判定します。
+  - `GEMINI_API_KEY` が設定されていない場合は無視されます。
+  - 注: `KEYWORDS` が指定されている場合、セマンティック判定は行われません。
 - **`SEMANTIC_THRESHOLD=`** : セマンティックスコアのしきい値を 0 〜 100 で指定します。
   - 高い値ほど絞り込みが厳しくなり、関心に強く一致するニュースのみを通知します。デフォルトは `80` です。
 - **`CHECK_INTERVAL=`** : ニュースをチェックしに行く間隔を **「秒数」** で指定します。（デフォルトは `60` 秒）。
