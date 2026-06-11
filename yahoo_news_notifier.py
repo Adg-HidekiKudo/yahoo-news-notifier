@@ -1,9 +1,9 @@
 import time
 
+from config import load_config
 from news_processor import (
     fetch_news_body,
     get_latest_news,
-    load_config,
     send_to_discord,
     speak_text,
     summarize_with_gemini,
@@ -33,20 +33,24 @@ def should_notify_article(title, body, keywords, semantic_interest, semantic_thr
 
 def main():
     print("⚙️ 設定ファイルを読み込んでいます...")
-    config = load_config()
-
-    if not config:
-        print("❌ プログラムを起動できませんでした。")
+    try:
+        config = load_config()
+    except Exception as e:
+        print(f"❌ 設定の読み込みに失敗しました: {e}")
         return
 
-    webhook_url = config["webhook_url"]
-    categories = config.get("categories") or []
-    keywords = config["keywords"]
-    api_key = config["gemini_api_key"]
-    ai_summary_enabled = config.get("ai_summary_enabled", True)
-    semantic_interest = config.get("semantic_interest")
-    semantic_threshold = config.get("semantic_threshold", 80)
-    check_interval = config["check_interval"]
+    webhook_url = config.DISCORD_WEBHOOK_URL
+    categories = config.CATEGORY or []
+    keywords = config.KEYWORDS
+    api_key = config.GEMINI_API_KEY
+    ai_summary_enabled = config.AI_SUMMARY_ENABLED
+    semantic_interest = config.SEMANTIC_INTEREST
+    semantic_threshold = config.SEMANTIC_THRESHOLD
+    check_interval = config.CHECK_INTERVAL
+
+    if not webhook_url:
+        print("❌ 設定ファイルに DISCORD_WEBHOOK_URL が指定されていません。")
+        return
 
     print("\n========= 現在の起動設定 =========")
     
