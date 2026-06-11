@@ -20,7 +20,10 @@ def load_config():
         "categories": ["domestic"],
         "keywords": [],
         "gemini_api_key": None,
+        "ai_summary_enabled": True,
         "check_interval": 60,
+        "semantic_interest": None,
+        "semantic_threshold": 80,
     }
 
     if not os.path.exists(CONFIG_FILE):
@@ -51,6 +54,24 @@ def load_config():
                     val = line.split("=", 1)[1].strip()
                     if val:
                         config["gemini_api_key"] = val
+                elif line.startswith("AI_SUMMARY_ENABLED="):
+                    val = line.split("=", 1)[1].strip()
+                    if val:
+                        config["ai_summary_enabled"] = val.lower() in {"1", "true", "yes", "on"}
+                    else:
+                        config["ai_summary_enabled"] = False
+                elif line.startswith("SEMANTIC_INTEREST="):
+                    val = line.split("=", 1)[1].strip()
+                    if val:
+                        config["semantic_interest"] = val
+                elif line.startswith("SEMANTIC_THRESHOLD="):
+                    val = line.split("=", 1)[1].strip()
+                    if val and val.isdigit():
+                        threshold = int(val)
+                        if 0 <= threshold <= 100:
+                            config["semantic_threshold"] = threshold
+                        else:
+                            print("⚠️ SEMANTIC_THRESHOLD は 0〜100 の範囲で指定してください。デフォルト 80 を使用します。")
                 elif line.startswith("CHECK_INTERVAL="):
                     val = line.split("=", 1)[1].strip()
                     if val and val.isdigit():
@@ -156,6 +177,40 @@ def summarize_with_gemini(api_key, title, body_text):
     return None
 
 
+def score_semantic_match(api_key, interest_text, title, body_text):
+    """Gemini を使って、ニュースが関心分野にどの程度合致するかを 0-100 の整数スコアで返す"""
+    if not api_key or not interest_text or not title or not body_text:
+        return None
+
+    try:
+        client = genai.Client(api_key=api_key)
+        prompt = f"""
+        以下のユーザーの関心テーマとニュース記事がどの程度関連しているかを、0～100のスコアで評価してください。
+        100は非常に関連性が高い、0は関連性がほとんどないことを意味します。
+        数字のみを返してください。
+
+        【ユーザーの関心】{interest_text}
+        【ニュースタイトル】{title}
+        【ニュース本文】{body_text}
+        """
+        response = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=prompt,
+        )
+        response_text = response.text.strip()
+
+        import re
+        match = re.search(r"\b([0-9]{1,3})\b", response_text)
+        if match:
+            score = int(match.group(1))
+            if 0 <= score <= 100:
+                return score
+    except Exception as e:
+        print(f"⚠️ セマンティックスコアリングエラー: {e}")
+
+    return None
+
+
 def generate_category_chart():
     """Excelのログデータからカテゴリごとの件数を集計し、円グラフを自動作成・挿入する"""
     if not os.path.exists(EXCEL_FILE):
@@ -243,7 +298,7 @@ def write_to_excel(category, title, url, summary):
         print(f"⚠️ Excelへの書き込みに失敗しました: {e}")
 
 
-def send_to_discord(webhook_url, news, is_test=False, hit_word=None, summary=None):
+def send_to_discord(webhook_url, news, is_test=False, hit_word=None, summary=None, semantic_score=None):
     """Discordにニュースを通知する"""
     if news is None:
         content = "📢 【システム通知】ニュースデータの読み込みに失敗しました。"
@@ -258,6 +313,8 @@ def send_to_discord(webhook_url, news, is_test=False, hit_word=None, summary=Non
         content = f"{prefix}**{news['title']}**\n{news['url']}"
         if summary:
             content += f"\n\n> 🤖 **AIによる3行要約:**\n> {summary.replace('\n', '\n> ')}"
+        if semantic_score is not None:
+            content += f"\n\n> 🔎 **関連度スコア:** {semantic_score}/100"
 
     payload = {"content": content}
 
