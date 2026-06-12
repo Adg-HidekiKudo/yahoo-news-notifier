@@ -1,30 +1,30 @@
 import time
 
 from config import load_config
-from news_processor import (
-    fetch_news_body,
-    get_latest_news,
-    send_to_discord,
-    speak_text,
-    summarize_with_gemini,
-    score_semantic_match,
-    write_to_excel,
-)
+
+# === 分離したサービス ===
+from services.scraping_service import ScrapingService
+from services.ai_service import AIService
+from services.excel_service import ExcelService
+from services.discord_service import DiscordService
+from services.speech_service import SpeechService
 
 
-def should_notify_article(title, body, keywords, semantic_interest, semantic_threshold, api_key):
-    """キーワードとセマンティック興味の両方で通知判定する"""
+def should_notify_article(title, body, keywords, semantic_interest, semantic_threshold, ai_service):
+    """キーワード or セマンティック一致で通知判定"""
+    # キーワード一致
     if keywords:
         for word in keywords:
             if word.lower() in title.lower():
                 return True, word, None
 
-    if semantic_interest and api_key and body:
-        score = score_semantic_match(api_key, semantic_interest, title, body)
+    # セマンティック一致
+    if semantic_interest and ai_service and body:
+        score = ai_service.semantic_score(semantic_interest, title, body)
         if score is not None and score >= semantic_threshold:
             return True, None, score
 
-    # キーワードもセマンティック興味も指定されていない場合は全件通知
+    # 条件なし → 全件通知
     if not keywords and not semantic_interest:
         return True, None, None
 
@@ -39,6 +39,7 @@ def main():
         print(f"❌ 設定の読み込みに失敗しました: {e}")
         return
 
+    # === 設定値 ===
     webhook_url = config.DISCORD_WEBHOOK_URL
     categories = config.CATEGORY or []
     keywords = config.KEYWORDS
@@ -52,9 +53,16 @@ def main():
         print("❌ 設定ファイルに DISCORD_WEBHOOK_URL が指定されていません。")
         return
 
+    # === サービス初期化 ===
+    scraper = ScrapingService()
+    ai_service = AIService(api_key) if api_key else None
+    excel = ExcelService()
+    discord = DiscordService()
+    speaker = SpeechService()
+
+    # === ★ 仕様として必須：現在の起動設定（そのまま残す） ===
     print("\n========= 現在の起動設定 =========")
     
-    # カテゴリ表示（domestic は日本語表記へ変換）
     display_cats = ["総合・主要" if c == "domestic" else c for c in categories]
     print(f"カテゴリ：{', '.join(display_cats)}")
     
@@ -84,107 +92,95 @@ def main():
 
     print("📡 ニュースのパトロールを開始しました...")
 
-    # 初回起動時のチェック: 各カテゴリごとに最新記事を取得して処理
+    # === 初回チェック ===
     last_news = {c: None for c in categories}
-    from news_processor import is_title_already_notified
 
-    any_found = False
     for cat in categories:
-        latest = get_latest_news(cat)
-        if latest:
-            any_found = True
-            if is_title_already_notified(latest["title"]):
-                print(f"⏭️  [重複スキップ] ({cat}) 過去ログにある既存の記事のため、通知・朗読をスキップします: {latest['title']}")
-                last_news[cat] = latest["title"]
-            else:
-                mode_text = "総合・主要" if cat == "domestic" else cat
-                print(f"🆕 初回の最新記事を検知しました ({cat}): {latest['title']}")
-                body = fetch_news_body(latest["url"])
-                summary = summarize_with_gemini(api_key, latest["title"], body) if ai_summary_enabled else None
-                notify, hit_word, semantic_score = should_notify_article(
-                    latest["title"],
-                    body,
-                    keywords,
-                    semantic_interest,
-                    semantic_threshold,
-                    api_key,
-                )
-                if notify:
-                    send_to_discord(
-                        webhook_url,
-                        latest,
-                        is_test=True,
-                        summary=summary,
-                        semantic_score=semantic_score,
-                    )
-                    write_to_excel(mode_text, latest["title"], latest["url"], summary)
-                    speech = f"起動しました。最新ニュース、{latest['title']}。"
-                    if summary:
-                        speech += (f"要約、{summary.replace('・', '').replace('\n', '。')}")
-                    speak_text(speech)
-                else:
-                    print(f"⏭️  [絞り込みスキップ] ({cat}) セマンティック/キーワード条件に一致しませんでした: {latest['title']}")
-                last_news[cat] = latest["title"]
+        latest = scraper.get_latest_news(cat)
+        if not latest:
+            print(f"⚠️ 初回取得失敗: {cat}")
+            continue
 
-    if not any_found:
-        print("⚠️ 初回のニュース取得に失敗しました。次の回に再試行します。")
+        title = latest["title"]
+        url = latest["url"]
 
-    # パトロールの無限ループ
+        if excel.is_duplicate(title):
+            print(f"⏭️ [重複スキップ] ({cat}) {title}")
+            last_news[cat] = title
+            continue
+
+        body = scraper.fetch_body(url)
+        summary = ai_service.summarize(title, body) if (ai_service and ai_summary_enabled) else None
+
+        notify, hit_word, semantic_score = should_notify_article(
+            title, body, keywords, semantic_interest, semantic_threshold, ai_service
+        )
+
+        mode_text = "総合・主要" if cat == "domestic" else cat
+
+        if notify:
+            discord.send(
+                webhook_url,
+                latest,
+                is_test=True,
+                summary=summary,
+                score=semantic_score
+            )
+            excel.write(mode_text, title, url, summary)
+
+            speech = f"起動しました。最新ニュース、{title}。"
+            if summary:
+                speech += summary.replace("・", "").replace("\n", "。")
+            speaker.speak(speech)
+        else:
+            print(f"⏭️ [絞り込みスキップ] ({cat}) {title}")
+
+        last_news[cat] = title
+
+    # === 監視ループ ===
     while True:
         time.sleep(check_interval)
-        # 各カテゴリを順次チェックする（同期実装）
+
         for cat in categories:
-            current_news = get_latest_news(cat)
+            current = scraper.get_latest_news(cat)
+            if not current:
+                continue
 
-            if current_news and (last_news.get(cat) is None or current_news["title"] != last_news.get(cat)):
-                last_news[cat] = current_news["title"]
+            title = current["title"]
+            url = current["url"]
 
-                # ここでも過去ログの重複を最終チェック（安全ガード）
-                from news_processor import is_title_already_notified
+            if last_news.get(cat) == title:
+                continue
+            last_news[cat] = title
 
-                if is_title_already_notified(current_news["title"]):
-                    continue
+            if excel.is_duplicate(title):
+                continue
 
-                body = fetch_news_body(current_news["url"])
-                summary = summarize_with_gemini(api_key, current_news["title"], body) if ai_summary_enabled else None
-                speech = f"新着ニュースです、{current_news['title']}。"
-                if summary:
-                    speech += f"要約、{summary.replace('・', '').replace('\n', '。')}"
+            body = scraper.fetch_body(url)
+            summary = ai_service.summarize(title, body) if (ai_service and ai_summary_enabled) else None
 
-                mode_text = "総合・主要" if cat == "domestic" else cat
-                notify, hit_word, semantic_score = should_notify_article(
-                    current_news["title"],
-                    body,
-                    keywords,
-                    semantic_interest,
-                    semantic_threshold,
-                    api_key,
+            notify, hit_word, semantic_score = should_notify_article(
+                title, body, keywords, semantic_interest, semantic_threshold, ai_service
+            )
+
+            mode_text = "総合・主要" if cat == "domestic" else cat
+
+            if notify:
+                discord.send(
+                    webhook_url,
+                    current,
+                    summary=summary,
+                    score=semantic_score,
+                    hit_word=hit_word
                 )
+                excel.write(mode_text, title, url, summary)
 
-                if notify:
-                    if hit_word:
-                        print(f"🎯 キーワード「{hit_word}」にヒット ({cat}): {current_news['title']}")
-                    elif semantic_interest and semantic_score is not None:
-                        print(f"🔎 セマンティック一致度 {semantic_score}/100 で通知 ({cat}): {current_news['title']}")
-                    else:
-                        print(f"🆕 新着記事を検知しました ({cat}): {current_news['title']}")
-
-                    send_to_discord(
-                        webhook_url,
-                        current_news,
-                        hit_word=hit_word,
-                        summary=summary,
-                        semantic_score=semantic_score,
-                    )
-                    write_to_excel(
-                        mode_text,
-                        current_news["title"],
-                        current_news["url"],
-                        summary,
-                    )
-                    speak_text(speech)
-                else:
-                    print(f"⏭️  [絞り込みスキップ] ({cat}) 記事は関心条件に一致しませんでした: {current_news['title']}")
+                speech = f"新着ニュースです、{title}。"
+                if summary:
+                    speech += summary.replace("・", "").replace("\n", "。")
+                speaker.speak(speech)
+            else:
+                print(f"⏭️ [絞り込みスキップ] ({cat}) {title}")
 
 
 if __name__ == "__main__":
