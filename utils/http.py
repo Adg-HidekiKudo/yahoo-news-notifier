@@ -58,7 +58,7 @@ class HTTPClient:
             raise HTTPError(f"Failed to GET JSON {url}: {e}") from e
 
     @retry(reraise=True, stop=stop_after_attempt(5), wait=wait_exponential(multiplier=0.5, max=30),
-           retry=retry_if_exception_type(requests.RequestException))
+            retry=retry_if_exception_type(requests.RequestException))
     def post_json(self, url: str, payload: Any, headers: Optional[dict] = None) -> Any:
         try:
             resp = self.session.post(url, json=payload, headers=headers, timeout=self.timeout)
