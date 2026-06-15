@@ -11,6 +11,7 @@ class ExcelService:
         self.titles = set()
         self._load_existing_titles()
 
+
     def _load_existing_titles(self):
         if not os.path.exists(self.file):
             return
@@ -21,12 +22,14 @@ class ExcelService:
         except Exception:
             pass
 
+
     def is_duplicate(self, title: str) -> bool:
         return title.strip() in self.titles
 
-    def write(self, category, title, url, summary):
+
+    def write(self, category, title, url, summary, importance):
         now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        row = [now, category, title, url, summary or "要約なし"]
+        row = [now, category, title, url, summary or "要約なし", importance]
 
         if os.path.exists(self.file):
             wb = openpyxl.load_workbook(self.file)
@@ -35,13 +38,21 @@ class ExcelService:
             wb = openpyxl.Workbook()
             ws = wb.active
             ws.title = "News Log"
-            ws.append(["通知日時", "カテゴリ", "ニュースタイトル", "記事URL", "AI要約内容"])
+            ws.append([
+                "通知日時",
+                "カテゴリ",
+                "ニュースタイトル",
+                "記事URL",
+                "AI要約内容",
+                "重要度スコア"
+            ])
 
         ws.append(row)
         wb.save(self.file)
 
         self.titles.add(title.strip())
         self.update_chart()
+
 
     def update_chart(self):
         if not os.path.exists(self.file):

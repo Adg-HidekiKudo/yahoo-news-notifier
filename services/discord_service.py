@@ -2,7 +2,7 @@
 from utils.http import get_client, HTTPError
 
 class DiscordService:
-    def send(self, webhook_url, news, summary=None, score=None, hit_word=None, is_test=False):
+    def send(self, webhook_url, news, summary=None, score=None, hit_word=None, importance=None, is_test=False):
         if news is None:
             content = "📢 システムエラー: ニュース取得に失敗しました。"
         else:
@@ -19,6 +19,9 @@ class DiscordService:
 
             if score is not None:
                 content += f"\n\n> 🔎 関連度: {score}/100"
+
+            if importance is not None:
+                content += f"\n\n> 🟥 重要度: {importance}/100"
 
         try:
             client = get_client()

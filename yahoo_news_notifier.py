@@ -111,6 +111,7 @@ def main():
 
         body = scraper.fetch_body(url)
         summary = ai_service.summarize(title, body) if (ai_service and ai_summary_enabled) else None
+        importance = ai_service.importance_score(title, body) if ai_service else None
 
         notify, hit_word, semantic_score = should_notify_article(
             title, body, keywords, semantic_interest, semantic_threshold, ai_service
@@ -124,9 +125,10 @@ def main():
                 latest,
                 is_test=True,
                 summary=summary,
-                score=semantic_score
+                score=semantic_score,
+                importance=importance
             )
-            excel.write(mode_text, title, url, summary)
+            excel.write(mode_text, title, url, summary, importance)
 
             speech = f"起動しました。最新ニュース、{title}。"
             if summary:
@@ -158,6 +160,7 @@ def main():
 
             body = scraper.fetch_body(url)
             summary = ai_service.summarize(title, body) if (ai_service and ai_summary_enabled) else None
+            importance = ai_service.importance_score(title, body) if ai_service else None
 
             notify, hit_word, semantic_score = should_notify_article(
                 title, body, keywords, semantic_interest, semantic_threshold, ai_service
@@ -171,9 +174,10 @@ def main():
                     current,
                     summary=summary,
                     score=semantic_score,
-                    hit_word=hit_word
+                    hit_word=hit_word,
+                    importance=importance
                 )
-                excel.write(mode_text, title, url, summary)
+                excel.write(mode_text, title, url, summary, importance)
 
                 speech = f"新着ニュースです、{title}。"
                 if summary:

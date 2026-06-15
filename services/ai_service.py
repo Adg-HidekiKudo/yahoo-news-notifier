@@ -7,6 +7,7 @@ class AIService:
         self.api_key = api_key
         self.client = genai.Client(api_key=api_key)
 
+
     def _retry(self, func, *args, max_retries=8):
         for attempt in range(max_retries):
             try:
@@ -20,6 +21,27 @@ class AIService:
                     print(f"❌ Gemini 永続エラー: {e}")
                     return None
         return None
+
+
+    def importance_score(self, title: str, body: str) -> int | None:
+        prompt = f"""
+以下の記事の社会的インパクトを 0〜100 で評価してください。
+数字のみを返してください。
+
+タイトル: {title}
+本文: {body}
+"""
+        try:
+            response = self.client.models.generate_content(
+                model="gemini-2.5-flash",
+                contents=prompt
+            )
+            text = response.text.strip()
+            return int(text)
+        except Exception as e:
+            print(f"❌ 重要度スコア取得エラー: {e}")
+            return None
+
 
     def summarize(self, title: str, body: str):
         if not body:
