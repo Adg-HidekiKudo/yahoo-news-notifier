@@ -221,6 +221,8 @@ CHECK_INTERVAL=60
 ├── config.py                   # 設定読み込み（Pydantic）
 ├── config.txt                  # 設定ファイル（カテゴリ・キーワード・AIキーなど）
 ├── run.bat                     # 自動起動バッチ
+├── run_dashboard.bat           # Webダッシュボード起動バッチ
+├── dashboard.py                # Webダッシュボード
 │
 ├── services/                   # ← 新しく追加されたサービス群
 │   ├── scraping_service.py     # Yahooニュース取得・本文抽出
@@ -236,5 +238,6 @@ CHECK_INTERVAL=60
 │   └── test_all_services.py    # 全サービス統合テスト
 │
 ├── news_log.xlsx               # Excelログ（自動生成）
+├── DASHBOARD.md                # Webダッシュボード説明書
 └── README.md                   # 説明書（本ファイル）
 ```
