@@ -109,7 +109,9 @@ def main():
             last_news[cat] = title
             continue
 
-        body = scraper.fetch_body(url)
+        article = scraper.fetch_article(url)
+        body = article["body"]
+        latest["thumbnail_url"] = article.get("thumbnail_url")
         summary = ai_service.summarize(title, body) if (ai_service and ai_summary_enabled) else None
         importance = ai_service.importance_score(title, body) if ai_service else None
 
@@ -126,7 +128,8 @@ def main():
                 is_test=True,
                 summary=summary,
                 score=semantic_score,
-                importance=importance
+                importance=importance,
+                category=mode_text
             )
             excel.write(mode_text, title, url, summary, importance)
 
@@ -158,7 +161,9 @@ def main():
             if excel.is_duplicate(title):
                 continue
 
-            body = scraper.fetch_body(url)
+            article = scraper.fetch_article(url)
+            body = article["body"]
+            current["thumbnail_url"] = article.get("thumbnail_url")
             summary = ai_service.summarize(title, body) if (ai_service and ai_summary_enabled) else None
             importance = ai_service.importance_score(title, body) if ai_service else None
 
@@ -175,7 +180,8 @@ def main():
                     summary=summary,
                     score=semantic_score,
                     hit_word=hit_word,
-                    importance=importance
+                    importance=importance,
+                    category=mode_text
                 )
                 excel.write(mode_text, title, url, summary, importance)
 
