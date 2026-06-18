@@ -1,3 +1,4 @@
+import asyncio
 import time
 
 from config import load_config
@@ -31,7 +32,22 @@ def should_notify_article(title, body, keywords, semantic_interest, semantic_thr
     return False, None, None
 
 
-def main():
+async def summarize_async(ai_service, title, body):
+    """AI要約の非同期ラッパー"""
+    return await asyncio.to_thread(ai_service.summarize, title, body)
+
+
+async def importance_async(ai_service, title, body):
+    """importance_scoreの非同期ラッパー"""
+    return await asyncio.to_thread(ai_service.importance_score, title, body)
+
+
+async def fetch_latest_async(scraper, category):
+    """カテゴリ取得の非同期ラッパー（最重要）"""
+    return category, await asyncio.to_thread(scraper.get_latest_news, category)
+
+
+async def main():
     print("⚙️ 設定ファイルを読み込んでいます...")
     try:
         config = load_config()
@@ -60,12 +76,11 @@ def main():
     discord = DiscordService()
     speaker = SpeechService()
 
-    # === ★ 仕様として必須：現在の起動設定（そのまま残す） ===
+    # === 現在の起動設定 ===
     print("\n========= 現在の起動設定 =========")
-    
     display_cats = ["総合・主要" if c == "domestic" else c for c in categories]
     print(f"カテゴリ：{', '.join(display_cats)}")
-    
+
     if keywords:
         print(f"キーワード：{', '.join(keywords)}")
     else:
@@ -78,7 +93,7 @@ def main():
         print(f"セマンティック関心：{semantic_interest} (しきい値 {semantic_threshold})")
     else:
         print("セマンティック関心：無効")
-        
+
     if ai_summary_enabled:
         if api_key:
             print("AI要約機能：有効")
@@ -86,7 +101,7 @@ def main():
             print("AI要約機能：有効（GeminiAPIキー未設定のため要約は実行されません）")
     else:
         print("AI要約機能：無効")
-    
+
     print(f"パトロール時間間隔：{check_interval}秒ごと")
     print("==================================\n")
 
@@ -95,8 +110,10 @@ def main():
     # === 初回チェック ===
     last_news = {c: None for c in categories}
 
-    for cat in categories:
-        latest = scraper.get_latest_news(cat)
+    tasks = [fetch_latest_async(scraper, cat) for cat in categories]
+    results = await asyncio.gather(*tasks)
+
+    for cat, latest in results:
         if not latest:
             print(f"⚠️ 初回取得失敗: {cat}")
             continue
@@ -112,8 +129,18 @@ def main():
         article = scraper.fetch_article(url)
         body = article["body"]
         latest["thumbnail_url"] = article.get("thumbnail_url")
-        summary = ai_service.summarize(title, body) if (ai_service and ai_summary_enabled) else None
-        importance = ai_service.importance_score(title, body) if ai_service else None
+
+        summary = (
+            await summarize_async(ai_service, title, body)
+            if (ai_service and ai_summary_enabled)
+            else None
+        )
+
+        importance = (
+            await importance_async(ai_service, title, body)
+            if ai_service
+            else None
+        )
 
         notify, hit_word, semantic_score = should_notify_article(
             title, body, keywords, semantic_interest, semantic_threshold, ai_service
@@ -144,10 +171,12 @@ def main():
 
     # === 監視ループ ===
     while True:
-        time.sleep(check_interval)
+        await asyncio.sleep(check_interval)
 
-        for cat in categories:
-            current = scraper.get_latest_news(cat)
+        tasks = [fetch_latest_async(scraper, cat) for cat in categories]
+        results = await asyncio.gather(*tasks)
+
+        for cat, current in results:
             if not current:
                 continue
 
@@ -164,8 +193,18 @@ def main():
             article = scraper.fetch_article(url)
             body = article["body"]
             current["thumbnail_url"] = article.get("thumbnail_url")
-            summary = ai_service.summarize(title, body) if (ai_service and ai_summary_enabled) else None
-            importance = ai_service.importance_score(title, body) if ai_service else None
+
+            summary = (
+                await summarize_async(ai_service, title, body)
+                if (ai_service and ai_summary_enabled)
+                else None
+            )
+
+            importance = (
+                await importance_async(ai_service, title, body)
+                if ai_service
+                else None
+            )
 
             notify, hit_word, semantic_score = should_notify_article(
                 title, body, keywords, semantic_interest, semantic_threshold, ai_service
@@ -194,4 +233,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
