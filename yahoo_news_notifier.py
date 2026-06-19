@@ -32,14 +32,8 @@ def should_notify_article(title, body, keywords, semantic_interest, semantic_thr
     return False, None, None
 
 
-async def summarize_async(ai_service, title, body):
-    """AI要約の非同期ラッパー"""
-    return await asyncio.to_thread(ai_service.summarize, title, body)
-
-
-async def importance_async(ai_service, title, body):
-    """importance_scoreの非同期ラッパー"""
-    return await asyncio.to_thread(ai_service.importance_score, title, body)
+async def analyze_article_async(ai_service, title, body):
+    return await asyncio.to_thread(ai_service.analyze_article, title, body)
 
 
 async def fetch_latest_async(scraper, category):
@@ -60,7 +54,6 @@ async def main():
     categories = config.CATEGORY or []
     keywords = config.KEYWORDS
     api_key = config.GEMINI_API_KEY
-    ai_summary_enabled = config.AI_SUMMARY_ENABLED
     semantic_interest = config.SEMANTIC_INTEREST
     semantic_threshold = config.SEMANTIC_THRESHOLD
     check_interval = config.CHECK_INTERVAL
@@ -94,13 +87,10 @@ async def main():
     else:
         print("セマンティック関心：無効")
 
-    if ai_summary_enabled:
-        if api_key:
-            print("AI要約機能：有効")
-        else:
-            print("AI要約機能：有効（GeminiAPIキー未設定のため要約は実行されません）")
+    if api_key:
+        print("AI要約機能：有効")
     else:
-        print("AI要約機能：無効")
+        print("AI要約機能：有効（GeminiAPIキー未設定のため要約は実行されません）")
 
     print(f"パトロール時間間隔：{check_interval}秒ごと")
     print("==================================\n")
@@ -130,17 +120,10 @@ async def main():
         body = article["body"]
         latest["thumbnail_url"] = article.get("thumbnail_url")
 
-        summary = (
-            await summarize_async(ai_service, title, body)
-            if (ai_service and ai_summary_enabled)
-            else None
-        )
-
-        importance = (
-            await importance_async(ai_service, title, body)
-            if ai_service
-            else None
-        )
+        result = await analyze_article_async(ai_service, title, body)
+        summary = result.get("summary")
+        points = "\n".join(result.get("points") or [])
+        importance = result.get("importance")
 
         notify, hit_word, semantic_score = should_notify_article(
             title, body, keywords, semantic_interest, semantic_threshold, ai_service
@@ -154,6 +137,7 @@ async def main():
                 latest,
                 is_test=True,
                 summary=summary,
+                points=points,
                 score=semantic_score,
                 importance=importance,
                 category=mode_text
@@ -194,17 +178,10 @@ async def main():
             body = article["body"]
             current["thumbnail_url"] = article.get("thumbnail_url")
 
-            summary = (
-                await summarize_async(ai_service, title, body)
-                if (ai_service and ai_summary_enabled)
-                else None
-            )
-
-            importance = (
-                await importance_async(ai_service, title, body)
-                if ai_service
-                else None
-            )
+            result = await analyze_article_async(ai_service, title, body)
+            summary = result.get("summary")
+            points = "\n".join(result.get("points") or [])
+            importance = result.get("importance")
 
             notify, hit_word, semantic_score = should_notify_article(
                 title, body, keywords, semantic_interest, semantic_threshold, ai_service
@@ -217,6 +194,7 @@ async def main():
                     webhook_url,
                     current,
                     summary=summary,
+                    points=points,
                     score=semantic_score,
                     hit_word=hit_word,
                     importance=importance,

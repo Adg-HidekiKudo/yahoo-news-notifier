@@ -48,6 +48,7 @@ class DiscordService:
         webhook_url,
         news,
         summary=None,
+        points=None,
         score=None,
         hit_word=None,
         importance=None,
@@ -60,6 +61,7 @@ class DiscordService:
             payload = self._build_embed_payload(
                 news=news,
                 summary=summary,
+                points=points,
                 score=score,
                 hit_word=hit_word,
                 importance=importance,
@@ -77,6 +79,7 @@ class DiscordService:
         self,
         news,
         summary=None,
+        points=None,
         score=None,
         hit_word=None,
         importance=None,
@@ -109,12 +112,13 @@ class DiscordService:
         embed = {
             "title": title,
             "url": url,
-            "description": _truncate(summary or "AI要約はありません。", MAX_DESCRIPTION_LENGTH),
+            "description": f"🧩 **AI要約（3行）**\n{_truncate(summary or 'AI要約はありません。', MAX_DESCRIPTION_LENGTH)}",
             "color": _category_color(category_name),
             "author": {"name": headline},
             "fields": [
                 {"name": "カテゴリ", "value": _truncate(category_name, MAX_FIELD_LENGTH), "inline": True},
                 {"name": "重要度", "value": _score_text(importance), "inline": True},
+                {"name": "📝 重要ポイント（5点）", "value": points, "inline": False},
                 {"name": "関連度", "value": _score_text(score), "inline": True},
                 {"name": "通知理由", "value": _truncate(reason, MAX_FIELD_LENGTH), "inline": False},
             ],

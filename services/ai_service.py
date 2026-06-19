@@ -1,5 +1,7 @@
 # services/ai_service.py
 import time
+import json
+import re
 from google import genai
 
 class AIService:
@@ -21,48 +23,53 @@ class AIService:
                     print(f"❌ Gemini 永続エラー: {e}")
                     return None
         return None
+    
 
-
-    def importance_score(self, title: str, body: str) -> int | None:
+    def analyze_article(self, title: str, body: str) -> dict:
         prompt = f"""
-以下の記事の社会的インパクトを 0〜100 で評価してください。
-数字のみを返してください。
+以下のニュース記事について、次の3つをまとめて生成してください。
+
+1. 要約（3行）
+2. 重要ポイント（5点、箇条書き）
+3. 記事の重要度（0〜100）
+
+必ず次の JSON 形式で返してください：
+
+{{
+    "summary": "...",
+    "points": ["...", "...", "...", "...", "..."],
+    "importance": 75
+}}
 
 タイトル: {title}
-本文: {body}
+
+本文:
+{body}
 """
-        try:
-            response = self.client.models.generate_content(
-                model="gemini-2.5-flash",
-                contents=prompt
-            )
-            text = response.text.strip()
-            return int(text)
-        except Exception as e:
-            print(f"❌ 重要度スコア取得エラー: {e}")
-            return None
-
-
-    def summarize(self, title: str, body: str):
-        if not body:
-            return None
-
-        prompt = f"""
-        以下の記事を3行の箇条書きで要約してください。
-        ・以外の余計な文は出力しない。
-
-        タイトル: {title}
-        本文: {body}
-        """
-
         def _call():
             res = self.client.models.generate_content(
                 model="gemini-2.5-flash",
                 contents=prompt
             )
-            return res.text.strip()
+            return res.text
 
-        return self._retry(_call)
+        raw = self._retry(_call)
+        if not raw:
+            return {"summary": None, "points": None, "importance": None}
+        
+        # コードブロック除去
+        clean = re.sub(r"^```[a-zA-Z]*|```$", "", raw.strip(), flags=re.MULTILINE).strip()
+
+        try:
+            return json.loads(clean)
+        except Exception:
+            print("JSONパース失敗:", clean)
+            return {
+                "summary": None,
+                "points": None,
+                "importance": None,
+            }
+
 
     def semantic_score(self, interest: str, title: str, body: str):
         if not interest or not body:
