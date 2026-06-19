@@ -18,7 +18,6 @@ class AppConfig(BaseModel):
     GEMINI_API_KEY: Optional[str] = None
     CATEGORY: List[str] = Field(default_factory=lambda: ["domestic"])
     KEYWORDS: List[str] = Field(default_factory=list)
-    AI_SUMMARY_ENABLED: bool = True
     SEMANTIC_INTEREST: Optional[str] = None
     SEMANTIC_THRESHOLD: int = 80
     CHECK_INTERVAL: int = 60
@@ -75,12 +74,6 @@ def load_config(path: str = "config.txt") -> AppConfig:
 
     keywords = raw.get("KEYWORDS")
     data["KEYWORDS"] = _parse_list(keywords) if keywords is not None else []
-
-    ai_enabled = raw.get("AI_SUMMARY_ENABLED")
-    if ai_enabled is None:
-        data["AI_SUMMARY_ENABLED"] = True
-    else:
-        data["AI_SUMMARY_ENABLED"] = ai_enabled.lower() in ("true", "1", "yes", "on")
 
     data["SEMANTIC_INTEREST"] = raw.get("SEMANTIC_INTEREST")
 

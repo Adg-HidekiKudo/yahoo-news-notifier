@@ -49,6 +49,7 @@ Python の `asyncio` と `to_thread` を活用し、複数の I/O 処理を同�
 # ✨ 主な機能
 
 - **AI自動3行要約（Gemini）**
+- **AI自動重要ポイント5点（Gemini）**
 - **AI重要度スコア（0〜100）**
 - **音声自動読み上げ**
 - **Discord Embed 通知**
@@ -96,7 +97,6 @@ DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/XXXXXX/XXXXXX
 GEMINI_API_KEY=AIzaSyXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 CATEGORY=it,business,science
 KEYWORDS=Python,AI,iPhone
-AI_SUMMARY_ENABLED=true
 SEMANTIC_INTEREST=ガジェットの最新技術
 SEMANTIC_THRESHOLD=80
 CHECK_INTERVAL=60
@@ -127,10 +127,7 @@ CHECK_INTERVAL=60
   - 注: キーワード指定時は、キーワードマッチが優先されます。セマンティック関心と組み合わせて使うことはできません。
 - **`GEMINI_API_KEY=`** : Google AI Studioで取得した無料のAPIキーを入力します。
   - 取得方法: [Google AI Studio](https://aistudio.google.com/app/apikey) にアクセス → "API キーを作成" で新規キーを生成してコピー
-  - `AI_SUMMARY_ENABLED=true` かつ `GEMINI_API_KEY` が設定されていて初めて、記事の要約機能が動作します。
-- **`AI_SUMMARY_ENABLED=`** : AI要約機能を有効/無効にします。
-  - `true` / `1` / `yes` / `on` を設定すると有効になります（詳細は上記 `GEMINI_API_KEY` を参照）。
-  - `false` / 空欄の場合は無効で、記事の要約・音声読み上げは実行されません。
+  - `GEMINI_API_KEY` が設定されていて初めて、記事の要約機能が動作します。
 - **`SEMANTIC_INTEREST=`** : 関心のあるテーマを文章で指定します。例: `ガジェットの最新技術` や `副業に役立つ経済知識`。
   - この項目を設定すると、Geminiがニュースタイトルと本文をユーザーの関心と比較し、関連度を判定します。
   - `GEMINI_API_KEY` が設定されていない場合は無視されます。
@@ -233,6 +230,7 @@ Discordへの通知は、通常のテキスト送信ではなくEmbed形式で�
 
 - タイトル: 記事URLへのリンク付き
 - 要約: AI要約を本文欄に表示
+- 重要ポイント: AIによる重要ポイントを本文欄に表示
 - カテゴリ: フィールドとして表示
 - 重要度: Geminiが算出した社会的インパクトスコア
 - 関連度: セマンティック判定時の関連度スコア
