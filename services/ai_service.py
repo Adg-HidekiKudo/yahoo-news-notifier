@@ -8,22 +8,21 @@ class AIService:
     def __init__(self, api_key: str):
         self.api_key = api_key
         self.client = genai.Client(api_key=api_key)
+        self.ai_available = True
 
 
-    def _retry(self, func, *args, max_retries=8):
+    def _retry(self, func, *args, max_retries=8, **kwargs):
         for attempt in range(max_retries):
             try:
-                return func(*args)
+                return func(*args, **kwargs)
             except Exception as e:
-                if "429" in str(e) or "503" in str(e):
-                    wait = min(2 ** attempt * 2, 60)
-                    print(f"⚠️ Gemini 一時エラー: {e} → {wait}秒待機")
-                    time.sleep(wait)
-                else:
-                    print(f"❌ Gemini 永続エラー: {e}")
+                if "RESOURCE_EXHAUSTED" in str(e):
+                    print("⚠️ AI利用枠が上限に達しました。AI機能を停止します。")
+                    self.ai_available = False
                     return None
+                time.sleep(2 ** attempt)
         return None
-    
+
 
     def analyze_article(self, title: str, body: str) -> dict:
         prompt = f"""

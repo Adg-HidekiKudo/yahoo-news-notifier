@@ -58,6 +58,8 @@ async def main():
     semantic_threshold = config.SEMANTIC_THRESHOLD
     check_interval = config.CHECK_INTERVAL
 
+    notified_ai_limit = False
+
     if not webhook_url:
         print("❌ 設定ファイルに DISCORD_WEBHOOK_URL が指定されていません。")
         return
@@ -90,7 +92,7 @@ async def main():
     if api_key:
         print("AI要約機能：有効")
     else:
-        print("AI要約機能：有効（GeminiAPIキー未設定のため要約は実行されません）")
+        print("AI要約機能：無効（APIキー未設定）")
 
     print(f"パトロール時間間隔：{check_interval}秒ごと")
     print("==================================\n")
@@ -120,10 +122,30 @@ async def main():
         body = article["body"]
         latest["thumbnail_url"] = article.get("thumbnail_url")
 
-        result = await analyze_article_async(ai_service, title, body)
-        summary = result.get("summary")
-        points = "\n".join(result.get("points") or [])
-        importance = result.get("importance")
+        # === AI呼び出し ===
+        if ai_service and ai_service.ai_available:
+            result = await analyze_article_async(ai_service, title, body)
+
+            # 無料枠切れ判定
+            if result is None:
+                ai_service.ai_available = False
+
+        # === AIなし処理（APIキーなし or 無料枠切れ） ===
+        if not ai_service or not ai_service.ai_available:
+
+            # 無料枠切れ通知（APIキーなしのときは通知しない）
+            if ai_service and not ai_service.ai_available and not notified_ai_limit:
+                print("⚠️ AI利用枠が上限に達しました。AI機能を停止します。")
+                notified_ai_limit = True
+
+            summary = None
+            points = None
+            importance = None
+
+        else:
+            summary = result.get("summary")
+            points = "\n".join(result.get("points") or [])
+            importance = result.get("importance")
 
         notify, hit_word, semantic_score = should_notify_article(
             title, body, keywords, semantic_interest, semantic_threshold, ai_service
@@ -178,10 +200,29 @@ async def main():
             body = article["body"]
             current["thumbnail_url"] = article.get("thumbnail_url")
 
-            result = await analyze_article_async(ai_service, title, body)
-            summary = result.get("summary")
-            points = "\n".join(result.get("points") or [])
-            importance = result.get("importance")
+            if ai_service and ai_service.ai_available:
+                result = await analyze_article_async(ai_service, title, body)
+                summary = result.get("summary")
+                points = "\n".join(result.get("points") or [])
+                importance = result.get("importance")
+            else:
+                if ai_service and not ai_service.ai_available and not notified_ai_limit:
+                    discord.send(
+                        webhook_url,
+                        {
+                            "title": "AI機能が停止しました",
+                            "url": "",
+                            "thumbnail_url": None,
+                            "category": "system"
+                        },
+                        summary="無料枠の上限に達したため、AI要約・重要ポイント抽出・重要度判定は停止しています。",
+                        is_test=True
+                    )
+                    notified_ai_limit = True
+
+                summary = None
+                points = None
+                importance = None
 
             notify, hit_word, semantic_score = should_notify_article(
                 title, body, keywords, semantic_interest, semantic_threshold, ai_service

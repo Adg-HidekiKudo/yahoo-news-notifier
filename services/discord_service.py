@@ -118,7 +118,7 @@ class DiscordService:
             "fields": [
                 {"name": "カテゴリ", "value": _truncate(category_name, MAX_FIELD_LENGTH), "inline": True},
                 {"name": "重要度", "value": _score_text(importance), "inline": True},
-                {"name": "📝 重要ポイント（5点）", "value": points, "inline": False},
+                {"name": "📝 重要ポイント（5点）", "value": points or "-", "inline": False},
                 {"name": "関連度", "value": _score_text(score), "inline": True},
                 {"name": "通知理由", "value": _truncate(reason, MAX_FIELD_LENGTH), "inline": False},
             ],
