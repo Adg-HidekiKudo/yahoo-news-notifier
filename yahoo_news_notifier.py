@@ -9,26 +9,68 @@ from services.ai_service import AIService
 from services.excel_service import ExcelService
 from services.discord_service import DiscordService
 from services.speech_service import SpeechService
+from services.search_service import SearchService
 
 
-def should_notify_article(title, body, keywords, semantic_interest, semantic_threshold, ai_service):
-    """キーワード or セマンティック一致で通知判定"""
-    # キーワード一致
+def should_notify_article(
+    title,
+    body,
+    keywords,
+    semantic_interest,
+    semantic_threshold,
+    ai_service,
+    search: SearchService,
+    notify_all_when_no_filters=True
+):
+    title_lower = title.lower()
+    body_lower = body.lower()
+
+    # ============================
+    # ① キーワード完全一致
+    # ============================
     if keywords:
         for word in keywords:
-            if word.lower() in title.lower():
-                return True, word, None
+            w = word.lower()
+            if w in title_lower or w in body_lower:
+                return True, f"keyword:{word}", 100
 
-    # セマンティック一致
-    if semantic_interest and ai_service and body:
+    # ============================
+    # ② Fuzzy一致（曖昧一致）
+    # ============================
+    if keywords:
+        for word in keywords:
+            score = fuzz.partial_ratio(word.lower(), title_lower)
+            if score >= 80:
+                return True, f"fuzzy:{word}", score
+
+    # ============================
+    # ③ 全文検索（BM25）
+    # ============================
+    if keywords:
+        for word in keywords:
+            results = search.search(word, limit=1)
+            if results:
+                score, url, _ = results[0]
+                if score >= 3.0:
+                    return True, f"fulltext:{word}", score
+
+    # ============================
+    # ④ セマンティック一致（AIが使えるときだけ）
+    # ============================
+    if semantic_interest and ai_service and ai_service.ai_available:
         score = ai_service.semantic_score(semantic_interest, title, body)
         if score is not None and score >= semantic_threshold:
-            return True, None, score
+            return True, f"semantic:{semantic_interest}", score
 
-    # 条件なし → 全件通知
-    if not keywords and not semantic_interest:
-        return True, None, None
+    # ============================
+    # ⑤ 条件なし通知（設定でONの場合）
+    # ============================
+    if notify_all_when_no_filters and not keywords and not semantic_interest:
+        return True, "no_filter", None
 
+    # ============================
+    # ⑥ どれにも該当しない → 通知しない
+    # ============================
     return False, None, None
 
 
@@ -70,6 +112,7 @@ async def main():
     excel = ExcelService()
     discord = DiscordService()
     speaker = SpeechService()
+    search = SearchService() 
 
     # === 現在の起動設定 ===
     print("\n========= 現在の起動設定 =========")
@@ -122,6 +165,9 @@ async def main():
         body = article["body"]
         latest["thumbnail_url"] = article.get("thumbnail_url")
 
+        # ここで全文検索エンジンに登録
+        search.add_article(title, body, url)
+
         # === AI呼び出し ===
         if ai_service and ai_service.ai_available:
             result = await analyze_article_async(ai_service, title, body)
@@ -148,7 +194,7 @@ async def main():
             importance = result.get("importance")
 
         notify, hit_word, semantic_score = should_notify_article(
-            title, body, keywords, semantic_interest, semantic_threshold, ai_service
+            title, body, keywords, semantic_interest, semantic_threshold, ai_service, search
         )
 
         mode_text = "総合・主要" if cat == "domestic" else cat
@@ -225,7 +271,7 @@ async def main():
                 importance = None
 
             notify, hit_word, semantic_score = should_notify_article(
-                title, body, keywords, semantic_interest, semantic_threshold, ai_service
+                title, body, keywords, semantic_interest, semantic_threshold, ai_service, search
             )
 
             mode_text = "総合・主要" if cat == "domestic" else cat

@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## 2026-06-25
+### Full-text Search Engine (BM25 + Fuzzy) を追加
+- 全文検索エンジン（BM25）を実装
+- Fuzzy（曖昧一致）検索を追加
+- AIなしモードの検索精度が大幅に向上
+- config.txt の変更は不要
+- テストコード（test_search.py）を追加
+
 ## 2026-06-18
 ### 🚀 高速化アップデート
 - カテゴリ取得を asyncio + to_thread で完全並列化（3〜5倍高速化）
